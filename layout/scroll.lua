@@ -98,7 +98,7 @@ function scroll:draw(wibox, cr, width, height)
             if (self.dir == "y" and v.y + v.h > height) then
                 draw_widget(wibox, cr, v.widget, v.x, v.y, v.w, v.h, v.w, v.h - (v.y + v.h - height))
             elseif (self.dir ~= "y" and v.x + v.w > width) then
-                draw_widget(wibox, cr, v.widget, v.x, v.y, v.w, v.h, v.w - (v.x + x.w - width), v.h)
+                draw_widget(wibox, cr, v.widget, v.x, v.y, v.w, v.h, v.w - (v.x + v.w - width), v.h)
             else
                 base.draw_widget(wibox, cr, v.widget, v.x, v.y , v.w, v.h)
             end
