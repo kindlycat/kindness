@@ -84,6 +84,10 @@ function slider:set_value(val)
     self:emit_signal("widget::updated")
 end
 
+function slider:get_value()
+    return self._val
+end
+
 function slider:_update_pos(x, y)
     self._pos = self.data.vertical and y or x
     if self._pos < 0 then
