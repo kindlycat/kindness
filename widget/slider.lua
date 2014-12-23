@@ -6,7 +6,6 @@
 local setmetatable = setmetatable
 local type = type
 local widget = require("wibox.widget.base")
-naughty = require('naughty')
 local color = require("gears.color")
 local floor = math.floor
 local capi = { 
@@ -22,16 +21,39 @@ local function round(x)
 end
 
 function slider:draw(wibox, cr, width, height)
-    w, h = width, height
-    cr:set_line_width(self.data.bar_line_width)
-    local _pos = self._pos
+    -- todo: refactor
+    local w, h = width, height
+    self._max = self.data.vertical and h or w
+    
+    if self._set_value or self._set_vertical then
+        if not self.data.vertical then
+            self._pos = self._max / 100 * self._val
+        else
+            self._pos = self._max / 100 * (100 - self._val)
+        end
+        if self._set_value then self._move_function(self._val) end
+        self._set_value = false
+        self._set_vertical = false
+    else
+        if not self.data.vertical then
+            self._val = round(self._pos * 100 / self._max)
+        else
+            self._val = round((self._max - self._pos) * 100 / self._max)
+        end
+        if self._val < 0 then self._val = 0 end
+        if self._val > 100 then self._val = 100 end
+    end
+
     local pointer, center
+    local _pos = self._pos
+    if _pos < 0 then _pos = 0 end
+    if _pos > self._max then _pos = self._max end
     
     local pointer_max = self.data.vertical and h - self.data.pointer_radius or w - self.data.pointer_radius
     local pointer_pos = (_pos < self.data.pointer_radius) and self.data.pointer_radius or _pos
     pointer_pos = pointer_pos > pointer_max and pointer_max or pointer_pos
-    self._max = self.data.vertical and h or w
     
+    cr:set_line_width(self.data.bar_line_width)
     if not self.data.vertical then
         center = h/2 - self.data.bar_line_width/2
         pointer = {x=pointer_pos, y=center}
@@ -61,6 +83,7 @@ function slider:draw(wibox, cr, width, height)
         cr:arc(pointer.x, pointer.y, self.data.pointer_radius, 0, 2 * math.pi)
         cr:fill()
     end
+    self._pos = _pos
 end
 
 function slider:fit(w, h)
@@ -69,39 +92,20 @@ end
 
 function slider:set_vertical(vertical)
     self.data.vertical = vertical or false
+    self._set_vertical = true
     self:emit_signal("widget::updated")
 end
 
 function slider:set_value(val)
+    if val < 0 then val = 0 end
+    if val > 100 then val = 100 end
     self._val = val
-    
-    if not self.data.vertical then
-        self._pos = self._max_value / 100 * self._val
-    else
-        self._pos = self._max_value / 100 * (self._max_value - self._val)
-    end
-    self._move_function(self._val)
+    self._set_value = true
     self:emit_signal("widget::updated")
 end
 
 function slider:get_value()
     return self._val
-end
-
-function slider:_update_pos(x, y)
-    self._pos = self.data.vertical and y or x
-    if self._pos < 0 then
-        self._pos = 0
-    end
-    if self._pos > self._max then
-        self._pos = self._max
-    end
-    if not self.data.vertical then
-        self._val = round(self._pos * 100 / self._max)
-    else
-        self._val = round((self._max - self._pos) * 100 / self._max)
-    end
-    self:emit_signal("widget::updated")
 end
 
 --- Create a slider widget.
@@ -111,8 +115,10 @@ local function new(move, args)
     local args = args or {}
     ret._pos = 0
     ret._val = 0
-    ret._max_value = 100
-    ret._move_function = move
+    ret._max = 0
+    ret._set_value = false
+    ret._set_vertical = false
+    ret._move_function = move or nil
     ret.data = {vertical=args.vertical or false,
                 bar_color=args.bar_color or "#dddddd",
                 bar_color_active=args.bar_color_active or bar_color,
@@ -133,22 +139,20 @@ local function new(move, args)
     end
 
     ret:connect_signal("button::press", function (v, x, y)
-        ret:_update_pos(x, y)
-        if move then
-            move(ret._val)
-        end
+        ret._pos = ret.data.vertical and y or x
+        ret._emit_updated()
+        if ret._move_function then ret._move_function(ret._val) end
         if ret.data.draggable then
-            mc = mouse:coords()
-            minx = mc['x'] - x
-            miny = mc['y'] - y
+            local mc = mouse:coords()
+            local minx = mc['x'] - x
+            local miny = mc['y'] - y
             capi.mousegrabber.run(function (_mouse)
                 for k, v in ipairs(_mouse.buttons) do
                     if k == 1 and v then
                         ret._pos = _mouse.x - minx
-                        ret:_update_pos(_mouse.x - minx, _mouse.y - miny)
-                        if move then
-                            ret._move_function(ret._val)
-                        end
+                        ret._pos = ret.data.vertical and _mouse.y - miny or _mouse.x - minx
+                        ret._emit_updated()
+                        if ret._move_function then ret._move_function(ret._val) end
                         return true
                     end
                 end
