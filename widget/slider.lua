@@ -31,7 +31,7 @@ function slider:draw(wibox, cr, width, height)
         else
             self._pos = self._max / 100 * (100 - self._val)
         end
-        if self._set_value then self._move_function(self._val) end
+        if self._set_value and not self._set_value_silent then self._move_function(self._val) end
         self._set_value = false
         self._set_vertical = false
     else
@@ -96,11 +96,12 @@ function slider:set_vertical(vertical)
     self:emit_signal("widget::updated")
 end
 
-function slider:set_value(val)
+function slider:set_value(val, silent)
     if val < 0 then val = 0 end
     if val > 100 then val = 100 end
     self._val = val
     self._set_value = true
+    self._set_value_silent = silent or false
     self:emit_signal("widget::updated")
 end
 
@@ -117,6 +118,7 @@ local function new(move, args)
     ret._val = 0
     ret._max = 0
     ret._set_value = false
+    ret._set_value_silent = false
     ret._set_vertical = false
     ret._move_function = move or nil
     ret.data = {vertical=args.vertical or false,
