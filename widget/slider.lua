@@ -136,6 +136,13 @@ local function new(move, args)
         end
     end
 
+    for k, v in pairs(ret.data) do
+        ret['set_' .. k] = function(self, val)
+            self.data[k] = val
+            self:emit_signal("widget::updated")
+        end
+    end
+
     ret._emit_updated = function()
         ret:emit_signal("widget::updated")
     end
