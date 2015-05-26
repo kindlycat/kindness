@@ -1,7 +1,7 @@
 ---------------------------------------------------------------------------
 -- @author Grigory Mishchenko
 -- @copyright 2014 Grigory Mishchenko
--- @release @AWESOME_VERSION@
+-- @release awesome-git
 ---------------------------------------------------------------------------
 
 local type = type

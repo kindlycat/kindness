@@ -1,11 +1,8 @@
 ---------------------------------------------------------------------------
 -- @author Grigory Mishchenko
--- @copyright 2010 Uli Grigory Mishchenko
--- @release v3.5.2-24-ga546367
+-- @copyright 2014 Grigory Mishchenko
+-- @release awesome-git
 ---------------------------------------------------------------------------
-
---- Collection of layouts that can be used in widget boxes
--- kindness.layout
 
 return
 {

@@ -1,7 +1,7 @@
 ---------------------------------------------------------------------------
 -- @author Grigory Mishchenko
 -- @copyright 2014 Grigory Mishchenko
--- @release @AWESOME_VERSION@
+-- @release awesome-git
 ---------------------------------------------------------------------------
 
 local type = type
@@ -21,7 +21,7 @@ local relative = { mt = {} }
 -- @param height The available height.
 function relative:draw(wibox, cr, width, height)
     for k, v in pairs(self.widgets) do
-        w, h = base.fit_widget(v, width, height)
+        local w, h = base.fit_widget(v, width, height)
         v.rw = v.rw or w
         v.rh = v.rh or h
         base.draw_widget(wibox, cr, v, v.rx, v.ry , v.rw, v.rh)
@@ -56,7 +56,7 @@ function relative:add(widget, args)
     widget.rh = args.height or nil
     
     widget:connect_signal("widget::updated", self._emit_updated)
-    self:emit_signal("widget::updated")
+    self._emit_updated()
 end
 
 --- Reset relative layout. This removes all widgets from the layout.

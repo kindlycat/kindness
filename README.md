@@ -10,6 +10,7 @@ You can download archive and extract to awesome lib derictory (```/usr/share/awe
 * Slider widget
 * Scroll layout
 * Relative layout
+* Animation (experimental)
 
 ## Docs
 Comming soon.

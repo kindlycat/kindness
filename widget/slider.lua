@@ -1,13 +1,13 @@
 ---------------------------------------------------------------------------
 -- @author Grigory Mishchenko
 -- @copyright 2014 Grigory Mishchenko
--- @release @AWESOME_VERSION@
+-- @release awesome-git
 ---------------------------------------------------------------------------
 local setmetatable = setmetatable
 local type = type
 local widget = require("wibox.widget.base")
 local color = require("gears.color")
-local floor = math.floor
+local round = require('kindness.helpers').round
 local capi = { 
     mouse = mouse,
     mousegrabber = mousegrabber
@@ -15,10 +15,6 @@ local capi = {
 
 -- kindness.widget.slider
 local slider = { mt = {} }
-
-local function round(x)
-    return floor(x + 0.5)
-end
 
 function slider:draw(wibox, cr, width, height)
     -- todo: refactor

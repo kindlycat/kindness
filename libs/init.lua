@@ -4,12 +4,7 @@
 -- @release awesome-git
 ---------------------------------------------------------------------------
 
---- Widget module for kindness
--- kindness.widget
-
 return
 {
-    slider = require("kindness.widget.slider");
+    tween = require("kindness.libs.tween");
 }
-
--- vim: filetype=lua:expandtab:shiftwidth=4:tabstop=8:softtabstop=4:textwidth=80

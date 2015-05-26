@@ -3,13 +3,17 @@
 -- @copyright 2015 Grigory Mishchenko
 -- @release awesome-git
 ---------------------------------------------------------------------------
+local floor = math.floor
+naughty = require('naughty')
 
---- Widget module for kindness
--- kindness.widget
+local helpers = {}
 
-return
-{
-    slider = require("kindness.widget.slider");
-}
+function helpers.round(x)
+    return floor(x + 0.5)
+end
 
--- vim: filetype=lua:expandtab:shiftwidth=4:tabstop=8:softtabstop=4:textwidth=80
+function helpers.debug(t, timeout)
+    naughty.notify({text=tostring(t), timeout=timeout or 0})
+end
+
+return helpers
