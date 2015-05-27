@@ -3,41 +3,46 @@
 -- @copyright 2014 Grigory Mishchenko
 -- @release awesome-git
 ---------------------------------------------------------------------------
-
 local type = type
 local pairs = pairs
 local setmetatable = setmetatable
 local huge = math.huge
+local min = math.min
 local base = require("wibox.layout.base")
 local widget_base = require("wibox.widget.base")
 local table = table
+local draw_widget = require('kindness.helpers').draw_widget
 
--- wibox.layout.scroll
 local scroll = { mt = {} }
 
+function scroll:set_cache(width, height)
+    local pos = 0
+    local drawing = {}
+    local widgets = self.widgets
 
--- Patched version of base.draw_widget. Register only wisible part of widget.
-local function draw_widget(wibox, cr, widget, x, y, width, height, reg_w, reg_h)
-    -- Use save() / restore() so that our modifications aren't permanent
-    cr:save()
+    for k, v in pairs(widgets) do
+        local x, y, w, h, _
 
-    -- Move (0, 0) to the place where the widget should show up
-    cr:translate(x, y)
-
-    -- Make sure the widget cannot draw outside of the allowed area
-    cr:rectangle(0, 0, width, height)
-    cr:clip()
-
-    -- Let the widget draw itself
-    local success, msg = pcall(widget.draw, widget, wibox, cr, width, height)
-    if not success then
-        print("Error while drawing widget: " .. msg)
+        if self.dir == "y" then
+            x, y, w = 0, pos, width
+            _, h = base.fit_widget(v, w, huge)
+            h = (h == huge) and height or h
+            if k == #widgets then
+                self._max_offset = (y + h <= height) and 0 or y + h - height
+            end
+            pos = pos + h
+        else
+            x, y, h = pos, 0, height
+            w, _ = base.fit_widget(v, huge, h)
+            w = (w == huge) and width or w
+            if k == #self.widgets then
+                self._max_offset = (x + w <= width) and 0 or x + w - width 
+            end
+            pos = pos + w
+        end
+        drawing[k] = {widget = v, w = w, h = h, x = x, y = y}
     end
-
-    -- Register the widget for input handling
-    wibox:widget_at(widget, base.rect_to_device_geometry(cr, 0, 0, reg_w, reg_h))
-
-    cr:restore()
+    self._cache_drawing = drawing
 end
 
 
@@ -47,66 +52,33 @@ end
 -- @param width The available width.
 -- @param height The available height.
 function scroll:draw(wibox, cr, width, height)
-    local pos = 0
-    local current_offset = {x = 0, y = 0}
-    local drawing = {}
-
-    for k, v in pairs(self.widgets) do
-        local x, y, w, h, _
-
-        if self.dir == "y" then
-            x, y, w = 0, pos, width
-            _, h = base.fit_widget(v, w, huge)
-            h = (h == huge) and height or h
-            if k == #self.widgets then
-                self._max_offset = y + h - height 
-                if y + h <= height then
-                    self._max_offset = 0
-                    self._offset = 0
-                elseif self._offset > self._max_offset or self._to_end then
-                    self._offset = self._max_offset
-                    self._to_end = false
-                end
-                current_offset.y = self._offset 
-            end
-            pos = pos + h 
-        else
-            x, y, h = pos, 0, height
-            w, _ = base.fit_widget(v, huge, h)
-            w = (w == huge) and width or w
-            if k == #self.widgets then
-                self._max_offset = x + w - width 
-                if x + w <= width then
-                    self._max_offset = 0
-                    self._offset = 0
-                elseif self._offset > self._max_offset or self._to_end then
-                    self._offset = self._max_offset
-                    self._to_end = false
-                end
-                current_offset.x = self._offset 
-            end
-            pos = pos + w
-        end
-        drawing[k] = {widget = v, w = w, h = h, x = x, y = y}
+    if not self._cache_drawing then
+        self:set_cache(width, height)
     end
-    for k, v in pairs(drawing) do
-        v.x = v.x - current_offset.x
-        v.y = v.y - current_offset.y
+
+    if self._offset > self._max_offset or self._to_end then
+        self._offset = self._max_offset
+        self._to_end = false
+    elseif self._offset < 0 then
+        self._offset = 0
+    end
+
+    for k, v in pairs(self._cache_drawing) do
+        local x = v.x - (self.dir == "x" and self._offset or 0)
+        local y = v.y - (self.dir == "y" and self._offset or 0)
+        local widget, w, h = v.widget, v.w, v.h
         -- Draw only visible widgets
-        if (self.dir == "y" and v.y + v.h > 0 and v.y < height) or
-            (self.dir ~= "y" and v.x + v.w > 0 and v.x < width) then
-            if (self.dir == "y" and v.y + v.h > height) then
-                draw_widget(wibox, cr, v.widget, v.x, v.y, v.w, v.h, v.w, v.h - (v.y + v.h - height))
-            elseif (self.dir ~= "y" and v.x + v.w > width) then
-                draw_widget(wibox, cr, v.widget, v.x, v.y, v.w, v.h, v.w - (v.x + v.w - width), v.h)
-            else
-                base.draw_widget(wibox, cr, v.widget, v.x, v.y , v.w, v.h)
-            end
-        elseif (self.dir == "y" and v.y > height) or
-            (self.dir ~= "y" and v.x > width) then
+        if y + h > 0 and y < height and x + w > 0 and x < width then
+            draw_widget(wibox, cr, widget, x, y, w, h, min(w, width - x), min(h, height - y))
+        elseif y > height or x > width then
             break
         end
     end
+end
+
+function scroll:widget_update()
+    self._cache_drawing = nil
+    self._emit_updated()
 end
 
 
@@ -123,30 +95,29 @@ end
 function scroll:add(widget)
     widget_base.check_widget(widget)
     table.insert(self.widgets, widget)
-    widget:connect_signal("widget::updated", self._emit_updated)
-    self:emit_signal("widget::updated")
+    widget:connect_signal("widget::updated", self.widget_update)
+    self._cache_drawing = nil
+    self._emit_updated()
 end
 
 --- Reset a scroll layout. This removes all widgets from the layout.
 function scroll:reset()
     for k, v in pairs(self.widgets) do
-        v:disconnect_signal("widget::updated", self._emit_updated)
+        v:disconnect_signal("widget::updated", self.widget_update)
     end
     self.widgets = {}
     self._offset = 0
     self._max_offset = 0
     self._to_end = false
-    self:emit_signal("widget::updated")
+    self._cache_drawing = nil
+    self._emit_updated()
 end
 
 --- Scroll layout content by val.
 -- @param val The value in pixels to scroll.
 function scroll:scroll(val)
     self._offset = self._offset + val
-    if self._offset < 0 then
-        self._offset = 0
-    end
-    self:emit_signal("widget::updated")
+    self._emit_updated()
 end
 
 --- Get offsets.
@@ -158,13 +129,13 @@ end
 --- Scroll to begin of layout.
 function scroll:to_begin()
     self._offset = 0
-    self:emit_signal("widget::updated")
+    self._emit_updated()
 end
 
 --- Scroll to end of layout.
 function scroll:to_end()
     self._to_end = true
-    self:emit_signal("widget::updated")
+    self._emit_updated()
 end
 
 local function get_layout(dir)
@@ -178,6 +149,7 @@ local function get_layout(dir)
 
     ret.dir = dir
     ret.widgets = {}
+    ret._cache_drawing = nil
     ret._offset = 0
     ret._max_offset = 0 
     ret._to_end = false
