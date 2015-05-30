@@ -4,7 +4,13 @@ kindness
 Some cool stuff for awesome wm.
 
 ## How to install
-You can download archive and extract to awesome lib derictory (```/usr/share/awesome/lib```), lua lib derictory (```/usr/share/lua/5.2```) or your config derictory.
+Just clone repo to your config folder. 
+
+For Arch:
+```yaourt -S kindness-git```
+
+For Gentoo:
+[nightmare overlay](https://gitlab.com/r3lgar/nightmare)
 
 ## What's in the box?!
 * Slider widget
@@ -13,4 +19,4 @@ You can download archive and extract to awesome lib derictory (```/usr/share/awe
 * Animation (experimental)
 
 ## Docs
-Comming soon.
+You can find documentation here https://github.com/kindlycat/kindness/wiki/Documentation.
