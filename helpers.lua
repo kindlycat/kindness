@@ -41,4 +41,10 @@ function helpers.draw_widget(wibox, cr, widget, x, y, width, height, reg_w, reg_
     cr:restore()
 end
 
+function helpers.cap(val, min, max)
+    if (val < min) then return min end
+    if (val > max) then return max end
+    return val
+end
+
 return helpers
