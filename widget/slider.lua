@@ -21,13 +21,13 @@ local slider = { mt = {} }
 
 local function getValueFromPosition(pos, step, minp, maxp, minv, maxv)
     local percentage = (pos - minp) / ((maxp - minp) or 1)
-    local value = step * round(percentage * (maxv - minv) / step) + minv
+    local value = step * round(percentage * (maxv - minv) / step or 1) + minv
     return cap(value, minv, maxv)
 end
 
-local function getPositionFromValue(val, minp, maxp, minv, maxv)
-    local percentage = (val - minv) / (maxv - minv)
-    local position = percentage * maxp
+local function getPositionFromValue(val, step, minp, maxp, minv, maxv)
+    local percentage = (val - minv) / ((maxv - minv) or 1)
+    local position = step * round(percentage * (maxp - minp) / step or 1) + minp
     return cap(position, minp, maxp)
 end
 
@@ -59,13 +59,14 @@ function slider:draw(wibox, cr, width, height)
     end
 
     self._pos = cap(self._pos, min_pos, max_pos)
+    self._val = cap(round(self._val / data.step) * data.step, data.min, data.max)
 
     if self._update_pos then
-        self._pos = getPositionFromValue(self._val, min_pos, max_pos, data.min, data.max)
+        self._pos = getPositionFromValue(self._val, data.step, min_pos, max_pos, data.min, data.max)
     else
         self._val = getValueFromPosition(self._pos, data.step, min_pos, max_pos, data.min, data.max)
         if data.snap then
-            self._pos = getPositionFromValue(self._val, min_pos, max_pos, data.min, data.max)
+            self._pos = getPositionFromValue(self._val, data.step, min_pos, max_pos, data.min, data.max)
         end
     end
 
