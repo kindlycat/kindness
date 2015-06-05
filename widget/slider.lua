@@ -9,6 +9,7 @@ local widget = require("wibox.widget.base")
 local color = require("gears.color")
 local round = require('kindness.helpers').round
 local cap = require('kindness.helpers').cap
+local surface = require("gears.surface")
 local capi = { 
     mouse = mouse,
     mousegrabber = mousegrabber
@@ -18,8 +19,8 @@ local capi = {
 local slider = { mt = {} }
 
 
-local function getValueFromPosition(pos, step, maxp, minv, maxv)
-    local percentage = pos / (maxp or 1)
+local function getValueFromPosition(pos, step, minp, maxp, minv, maxv)
+    local percentage = (pos - minp) / ((maxp - minp) or 1)
     local value = step * round(percentage * (maxv - minv) / step) + minv
     return cap(value, minv, maxv)
 end
@@ -27,54 +28,81 @@ end
 local function getPositionFromValue(val, minp, maxp, minv, maxv)
     local percentage = (val - minv) / (maxv - minv)
     local position = percentage * maxp
-    return cap(position, 0, maxp)
+    return cap(position, minp, maxp)
 end
+
 
 function slider:draw(wibox, cr, width, height)
     local pointer, center
     local data = self.data
-    local center = (data.vertical and width or height) / 2 - data.bar_line_width / 2
-    local pointer_max = data.vertical and height - data.pointer_radius or width - data.pointer_radius
-    local max_pos = data.vertical and height or width
+    local orient = data.vertical and height or width
+    local center = (data.vertical and width or height) / 2
+    local ps = data.vertical and self._pointer_size['h'] or self._pointer_size['w']
+    local min_pos = 0
+    local max_pos = orient
+    local min_bar = 0
+    local max_bar = orient
+    local pointer_min = ps
+    local pointer_max = orient - ps
+
+    if data.mode == 'stop_position' then
+        min_pos = ps
+        max_pos = orient - ps
+    elseif data.mode == 'over' then
+        pointer_min = 0
+        pointer_max = orient
+    elseif data.mode == 'over_margin' then
+        min_pos = ps
+        max_pos = orient - ps
+        min_bar = ps
+        max_bar = orient - ps
+    end
+
+    self._pos = cap(self._pos, min_pos, max_pos)
 
     if self._update_pos then
-        self._pos = getPositionFromValue(self._val, 0, max_pos, data.min, data.max)
+        self._pos = getPositionFromValue(self._val, min_pos, max_pos, data.min, data.max)
     else
-        self._val = getValueFromPosition(self._pos, data.step, max_pos, data.min, data.max)
+        self._val = getValueFromPosition(self._pos, data.step, min_pos, max_pos, data.min, data.max)
         if data.snap then
-            self._pos = getPositionFromValue(self._val, 0, max_pos, data.min, data.max)
+            self._pos = getPositionFromValue(self._val, min_pos, max_pos, data.min, data.max)
         end
     end
 
-    local pointer_pos = cap(self._pos, data.pointer_radius, pointer_max)
+    local pointer_pos = cap(self._pos, pointer_min, pointer_max)
 
     cr:set_line_width(data.bar_line_width)
     if not data.vertical then
         pointer = {x=pointer_pos, y=center}
-        cr:move_to(0, center)
+        cr:move_to(min_bar, center)
         cr:line_to(self._pos, center)
         cr:set_source(color(data.bar_color_active))
         cr:stroke()
         cr:move_to(self._pos, center)
-        cr:line_to(width, center)
+        cr:line_to(max_bar, center)
         cr:set_source(color(data.bar_color))
         cr:stroke()
     else
         pointer = {x=center, y=pointer_pos}
-        cr:move_to(center, 0)
+        cr:move_to(center, min_bar)
         cr:line_to(center, self._pos)
         cr:set_source(color(data.bar_color))
         cr:stroke()
         cr:move_to(center, self._pos)
-        cr:line_to(center, height)
+        cr:line_to(center, max_bar)
         cr:set_source(color(data.bar_color_active))
         cr:stroke()
     end
 
     if data.with_pointer then
-        cr:set_source(color(data.pointer_color))
-        cr:arc(pointer.x, pointer.y, data.pointer_radius, 0, 2 * math.pi)
-        cr:fill()
+        if data.pointer then
+            cr:set_source_surface(data.pointer, pointer.x - self._pointer_size['w'], pointer.y - self._pointer_size['h'])
+            cr:paint()
+        else
+            cr:set_source(color(data.pointer_color))
+            cr:arc(pointer.x, pointer.y, data.pointer_radius, 0, 2 * math.pi)
+            cr:fill()
+        end
     end
 
     if self._val ~= self._cache_val and not self._silent and self._move_function then 
@@ -92,10 +120,28 @@ function slider:set_vertical(vertical)
     self._emit_updated()
 end
 
+function slider:set_pointer(val)
+    self.data.pointer = surface.load(val)
+    local w, h = surface.get_size(self.data.pointer)
+    self._pointer_size = {w=w/2, h=h/2}
+    self._emit_updated()
+end
+
+function slider:set_pointer_radius(val)
+    self._pointer_size = {w=v, h=v}
+    self._emit_updated()
+end
+
 function slider:set_value(val, silent)
     if val == self._val then return end
     self._val = val
     self._silent = silent or false
+    self._update_pos = true
+    self._emit_updated()
+end
+
+function slider:set_mode(mode)
+    self.data.mode = mode
     self._update_pos = true
     self._emit_updated()
 end
@@ -127,8 +173,10 @@ local function new(move, args)
         min = args.min or 0,
         max = args.max or 100,
         step = args.step or 1,
-        snap = args.snap or false
+        snap = args.snap or false,
+        mode = args.mode or 'stop'
     }
+    ret._pointer_size = {w=ret.data.pointer_radius, h=ret.data.pointer_radius}
 
     ret.fit = function(self, w, h) return w, h end
     
@@ -148,6 +196,8 @@ local function new(move, args)
             self._emit_updated()
         end
     end
+
+    if args.pointer then ret:set_pointer(args.pointer) end
 
     ret:connect_signal("button::press", function (v, x, y)
         ret._pos = ret.data.vertical and y or x
