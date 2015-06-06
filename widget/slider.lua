@@ -21,13 +21,13 @@ local slider = { mt = {} }
 
 local function getValueFromPosition(pos, step, minp, maxp, minv, maxv)
     local percentage = (pos - minp) / ((maxp - minp) or 1)
-    local value = step * round(percentage * (maxv - minv) / step or 1) + minv
-    return cap(value, minv, maxv)
+    local value = step * percentage * (maxv - minv) / (step or 1) + minv
+    return cap(round(value), minv, maxv)
 end
 
 local function getPositionFromValue(val, step, minp, maxp, minv, maxv)
     local percentage = (val - minv) / ((maxv - minv) or 1)
-    local position = step * round(percentage * (maxp - minp) / step or 1) + minp
+    local position = step * percentage * (maxp - minp) / (step or 1) + minp
     return cap(position, minp, maxp)
 end
 
@@ -97,7 +97,7 @@ function slider:draw(wibox, cr, width, height)
 
     if data.with_pointer then
         if data.pointer then
-            cr:set_source_surface(data.pointer, pointer.x - self._pointer_size['w'], pointer.y - self._pointer_size['h'])
+            cr:set_source_surface(data.pointer, round(pointer.x - self._pointer_size['w']), round(pointer.y - self._pointer_size['h']))
             cr:paint()
         else
             cr:set_source(color(data.pointer_color))
@@ -119,18 +119,27 @@ function slider:set_vertical(vertical)
     self.data.vertical = vertical
     self._update_pos = true
     self._emit_updated()
+    self:emit_signal("slider::data_updated")
 end
 
 function slider:set_pointer(val)
-    self.data.pointer = surface.load(val)
-    local w, h = surface.get_size(self.data.pointer)
-    self._pointer_size = {w=w/2, h=h/2}
+    self.data.pointer = val
+    if val then
+        self.data.pointer = surface.load(val)
+        local w, h = surface.get_size(self.data.pointer)
+        self._pointer_size = {w=w/2, h=h/2}
+    else
+        self._pointer_size = {w=self.data.pointer_radius, h=self.data.pointer_radius}
+    end
     self._emit_updated()
+    self:emit_signal("slider::data_updated")
 end
 
 function slider:set_pointer_radius(val)
-    self._pointer_size = {w=v, h=v}
+    self.data.pointer_radius = val
+    self._pointer_size = {w=val, h=val}
     self._emit_updated()
+    self:emit_signal("slider::data_updated")
 end
 
 function slider:set_value(val, silent)
@@ -145,6 +154,7 @@ function slider:set_mode(mode)
     self.data.mode = mode
     self._update_pos = true
     self._emit_updated()
+    self:emit_signal("slider::data_updated")
 end
 
 function slider:get_value()
@@ -165,7 +175,7 @@ local function new(move, args)
     ret.data = {
         vertical = args.vertical or false,
         bar_color = args.bar_color or "#dddddd",
-        bar_color_active = args.bar_color_active or bar_color,
+        bar_color_active = args.bar_color_active or "#dddddd",
         draggable = args.draggable == nil and true or args.draggable,
         with_pointer = args.with_pointer == nil and true or args.with_pointer,
         pointer_color = args.pointer_color or "#dddddd",
@@ -178,6 +188,7 @@ local function new(move, args)
         mode = args.mode or 'stop'
     }
     ret._pointer_size = {w=ret.data.pointer_radius, h=ret.data.pointer_radius}
+    ret:add_signal('slider::data_updated')
 
     ret.fit = function(self, w, h) return w, h end
     
@@ -192,9 +203,12 @@ local function new(move, args)
     end
 
     for k, v in pairs(ret.data) do
-        ret['set_' .. k] = function(self, val)
-            self.data[k] = val
-            self._emit_updated()
+        if not ret['set_' .. k] then 
+            ret['set_' .. k] = function(self, val)
+                self.data[k] = val
+                self._emit_updated()
+                self:emit_signal("slider::data_updated")
+            end
         end
     end
 
