@@ -37,7 +37,7 @@ function slider:draw(wibox, cr, width, height)
     local data = self.data
     local orient = data.vertical and height or width
     local center = (data.vertical and width or height) / 2
-    local ps = data.vertical and self._pointer_size['h'] or self._pointer_size['w']
+    local ps = data.vertical and self:get_size()['h'] or self:get_size()['w']
     local min_pos = 0
     local max_pos = orient
     local min_bar = 0
@@ -97,7 +97,8 @@ function slider:draw(wibox, cr, width, height)
 
     if data.with_pointer then
         if data.pointer then
-            cr:set_source_surface(data.pointer, round(pointer.x - self._pointer_size['w']), round(pointer.y - self._pointer_size['h']))
+            local ps = self:get_size()
+            cr:set_source_surface(data.pointer, round(pointer.x - ps['w']), round(pointer.y - ps['h']))
             cr:paint()
         else
             cr:set_source(color(data.pointer_color))
@@ -120,6 +121,10 @@ function slider:set_vertical(vertical)
     self._update_pos = true
     self._emit_updated()
     self:emit_signal("slider::data_updated")
+end
+
+function slider:get_size()
+    return {w=self._pointer_size['w'], h=self._pointer_size['h']}
 end
 
 function slider:set_pointer(val)

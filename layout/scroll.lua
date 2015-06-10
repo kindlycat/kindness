@@ -18,6 +18,7 @@ local slider = require('kindness.widget.slider')
 local join = require('awful.util').table.join
 local color = require("gears.color")
 local surface = require("gears.surface")
+local cairo = require('lgi').cairo
 
 local scroll = { mt = {} }
 
@@ -25,20 +26,20 @@ function scroll:_set_cache(width, height)
     local pos = 0
     local drawing = {}
     local widgets = self.widgets
-    self._sb_offset = 0
-    
+    local sb_offset = 0
+    local scrollbar_size
+
     if self.scrollbar then
-        if not self.data.scrollbar_ontop then
-            local ps = self.dir == "y"  and self.scrollbar._pointer_size['w'] or self.scrollbar._pointer_size['h']
-            self._sb_offset = self.data.scrollbar_ontop and 0 or max(self.scrollbar.data.bar_line_width, ps * 2)
-        end
+        local ps = (self.dir == "y") and self.scrollbar:get_size()['w'] or self.scrollbar:get_size()['h']
+        scrollbar_size = max(self.scrollbar.data.bar_line_width, ps * 2)
+        sb_offset = self.data.scrollbar_ontop and 0 or scrollbar_size
     end
 
     for k, v in pairs(widgets) do
         local x, y, w, h, _
 
         if self.dir == "y" then
-            x, y, w = 0, pos, width - self._sb_offset
+            x, y, w = 0, pos, width - sb_offset
             _, h = base.fit_widget(v, w, huge)
             h = (h == huge) and height or h
             if k == #widgets then
@@ -46,7 +47,7 @@ function scroll:_set_cache(width, height)
             end
             pos = pos + h
         else
-            x, y, h = pos, 0, height - self._sb_offset
+            x, y, h = pos, 0, height - sb_offset
             w, _ = base.fit_widget(v, huge, h)
             w = (w == huge) and width or w
             if k == #self.widgets then
@@ -55,10 +56,30 @@ function scroll:_set_cache(width, height)
             pos = pos + w
         end
         drawing[k] = {widget = v, x = x, y = y, w = w, h = h, 
-            rw = min(w - self._sb_offset, width - x - self._sb_offset),
-            rh = min(h - self._sb_offset, height - y - self._sb_offset)
+            rw = min(w - sb_offset, width - x - sb_offset),
+            rh = min(h - sb_offset, height - y - sb_offset)
         }
     end
+
+    if self.scrollbar then
+        local x = (self.dir == "y") and width - scrollbar_size or 0
+        local y = (self.dir == "y") and 0 or height - scrollbar_size
+        local w = (self.dir == "y") and scrollbar_size or width
+        local h = (self.dir == "y") and height or scrollbar_size
+        self.scrollbar.data.max = self._max_offset
+        if self.data.custom_pointer then
+            local pw = (self.dir == "y") and w or max(w*w/(w+self._max_offset), 15)
+            local ph = (self.dir == "y") and max(h*h/(h+self._max_offset), 15) or h
+            local img = cairo.ImageSurface(cairo.Format.ARGB32, pw, ph)
+            local cr = cairo.Context(img)
+            cr.source = color(self.scrollbar.data.pointer_color)
+            cr:paint()
+            self.scrollbar.data.pointer = surface.load(img)
+            self.scrollbar._pointer_size = {w=pw/2, h=ph/2}
+        end
+        self._cache_scrollbar = {x=x, y=y, w=w, h=h}
+    end
+
     self._cache_drawing = drawing
 end
 
@@ -76,28 +97,6 @@ function scroll:draw(wibox, cr, width, height)
 
     self._offset = cap(self._offset, 0, self._max_offset)
 
-    if self.scrollbar and self._max_offset then
-        local x = self.dir == "y" and width - self._sb_offset or 0
-        local y = self.dir == "y" and 0 or height - self._sb_offset
-        local w = self.dir == "y" and self._sb_offset or width
-        local h = self.dir == "y" and height or self._sb_offset
-        if not cached then
-            self.scrollbar.data.max = self._max_offset
-            if self.data.custom_pointer then
-                local pw = self.dir == "y" and w or max(w*w/(w+self._max_offset), 15)
-                local ph = self.dir == "y" and max(h*h/(h+self._max_offset), 15) or h
-                local img = cairo.ImageSurface(cairo.Format.ARGB32, pw, ph)
-                local cr = cairo.Context(img)
-                cr.source = color(self.scrollbar.data.pointer_color)
-                cr:paint()
-                self.scrollbar.data.pointer = surface.load(img)
-                self.scrollbar._pointer_size = {w=pw/2, h=ph/2}
-            end
-        end
-        
-        draw_widget(wibox, cr, self.scrollbar, x, y, w, h, w, h)
-    end
-
     for k, v in pairs(self._cache_drawing) do
         local x = v.x - (self.dir == "x" and self._offset or 0)
         local y = v.y - (self.dir == "y" and self._offset or 0)
@@ -109,21 +108,15 @@ function scroll:draw(wibox, cr, width, height)
             break
         end
     end
+
+    if self.scrollbar and self._show_scrollbar then
+        draw_widget(wibox, cr, self.scrollbar, 
+            self._cache_scrollbar.x, self._cache_scrollbar.y,
+            self._cache_scrollbar.w, self._cache_scrollbar.h,
+            self._cache_scrollbar.w, self._cache_scrollbar.h
+        )
+    end
     self._to_end = false
-end
-
-function scroll:_widget_update()
-    self._cache_drawing = nil
-    self._emit_updated()
-end
-
-
---- Fit the scroll layout into the given area.
--- @param w The available width.
--- @param h The available height.
--- @return The width and height that the widget wants to use.
-function scroll:fit(w, h)
-    return w, h
 end
 
 --- Add a widget to the given scroll layout.
@@ -196,13 +189,21 @@ local function get_layout(dir, args)
     ret.widgets = {}
     ret._cache_drawing = nil
     ret._offset = 0
-    ret._max_offset = 0 
+    ret._max_offset = 0
     ret._to_end = false
+    ret._show_scrollbar = (args.scrollbar and not args.scrollbar_hover)
     ret.data = args or {}
-    ret.data['custom_pointer'] = args.custom_pointer == nil and true or args.custom_pointer
+    ret.data['custom_pointer'] = (args.custom_pointer == nil) and true or args.custom_pointer
 
     ret._emit_updated = function()
         ret:emit_signal("widget::updated")
+    end
+
+    ret.fit = function(self, w, h) return w, h end
+
+    ret._widget_update = function()
+        ret._cache_drawing = nil
+        ret._emit_updated()
     end
 
     if args.scrollbar then
@@ -213,9 +214,22 @@ local function get_layout(dir, args)
             mode = 'stop_position',
             vertical=(dir == 'y')
         }
-        ret.scrollbar = slider(function(v)
-            ret:_set_offset(v)
-        end, join(sl_args, args))
+        ret.scrollbar = slider(function(v) ret:_set_offset(v) end, join(sl_args, args))
+
+        if args.scrollbar_hover then
+            if (ret.data.scrollbar_ontop == nil) then
+                ret.data.scrollbar_ontop = true
+            end
+            ret:connect_signal("mouse::enter", function()
+                ret._show_scrollbar = true
+                ret._emit_updated()
+            end)
+            ret:connect_signal("mouse::leave", function()
+                ret._show_scrollbar = false
+                ret._emit_updated()
+            end)
+        end
+        
         ret.scrollbar:connect_signal("widget::updated", ret._emit_updated)
         ret.scrollbar:connect_signal("slider::data_updated", function() ret._widget_update(ret) end)
     end
