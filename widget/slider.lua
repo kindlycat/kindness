@@ -5,11 +5,14 @@
 ---------------------------------------------------------------------------
 local setmetatable = setmetatable
 local type = type
+local max = math.max
+local pi = math.pi
 local widget = require("wibox.widget.base")
 local color = require("gears.color")
 local round = require('kindness.helpers').round
 local cap = require('kindness.helpers').cap
 local surface = require("gears.surface")
+local cairo = require('lgi').cairo
 local capi = { 
     mouse = mouse,
     mousegrabber = mousegrabber
@@ -37,7 +40,8 @@ function slider:draw(wibox, cr, width, height)
     local data = self.data
     local orient = data.vertical and height or width
     local center = (data.vertical and width or height) / 2
-    local ps = data.vertical and self:get_size()['h'] or self:get_size()['w']
+    local pw, ph = self:get_pointer_size()
+    local ps = data.vertical and ph/2 or pw/2
     local min_pos = 0
     local max_pos = orient
     local min_bar = 0
@@ -96,15 +100,8 @@ function slider:draw(wibox, cr, width, height)
     end
 
     if data.with_pointer then
-        if data.pointer then
-            local ps = self:get_size()
-            cr:set_source_surface(data.pointer, round(pointer.x - ps['w']), round(pointer.y - ps['h']))
-            cr:paint()
-        else
-            cr:set_source(color(data.pointer_color))
-            cr:arc(pointer.x, pointer.y, data.pointer_radius, 0, 2 * math.pi)
-            cr:fill()
-        end
+        cr:set_source_surface(data.pointer, round(pointer.x - pw/2), round(pointer.y - ph/2))
+        cr:paint()
     end
 
     if self._val ~= self._cache_val and not self._silent and self._move_function then 
@@ -123,28 +120,41 @@ function slider:set_vertical(vertical)
     self:emit_signal("slider::data_updated")
 end
 
-function slider:get_size()
-    return {w=self._pointer_size['w'], h=self._pointer_size['h']}
+function slider:fit(width, height)
+    local pw, ph = self:get_pointer_size()
+    local ps = (self.data.vertical) and pw or ph
+    local max_size = max(self.data.bar_line_width, ps)
+    local w = (self.data.vertical) and max_size or width
+    local h = (self.data.vertical) and height or max_size
+    return w, h
+end
+
+function slider:get_pointer_size()
+    return surface.get_size(self.data.pointer)
 end
 
 function slider:set_pointer(val)
-    self.data.pointer = val
-    if val then
-        self.data.pointer = surface.load(val)
-        local w, h = surface.get_size(self.data.pointer)
-        self._pointer_size = {w=w/2, h=h/2}
-    else
-        self._pointer_size = {w=self.data.pointer_radius, h=self.data.pointer_radius}
+    if not val then
+        local pr = self.data.pointer_radius
+        val = cairo.ImageSurface(cairo.Format.ARGB32, pr*2, pr*2)
+        local cr = cairo.Context(val)
+        cr:set_source(color(self.data.pointer_color))
+        cr:arc(pr, pr, pr, 0, 2 * pi)
+        cr:fill()
     end
+    self.data.pointer = surface.load(val)
     self._emit_updated()
     self:emit_signal("slider::data_updated")
 end
 
 function slider:set_pointer_radius(val)
     self.data.pointer_radius = val
-    self._pointer_size = {w=val, h=val}
-    self._emit_updated()
-    self:emit_signal("slider::data_updated")
+    self:set_pointer()
+end
+
+function slider:set_pointer_color(val)
+    self.data.pointer_color = val
+    self:set_pointer()
 end
 
 function slider:set_value(val, silent)
@@ -192,10 +202,7 @@ local function new(move, args)
         snap = args.snap or false,
         mode = args.mode or 'stop'
     }
-    ret._pointer_size = {w=ret.data.pointer_radius, h=ret.data.pointer_radius}
     ret:add_signal('slider::data_updated')
-
-    ret.fit = function(self, w, h) return w, h end
     
     for k, v in pairs(slider) do
         if type(v) == "function" then
@@ -217,7 +224,7 @@ local function new(move, args)
         end
     end
 
-    if args.pointer then ret:set_pointer(args.pointer) end
+    ret:set_pointer(args.pointer)
 
     ret:connect_signal("button::press", function (v, x, y)
         ret._pos = ret.data.vertical and y or x

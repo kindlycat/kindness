@@ -30,8 +30,8 @@ function scroll:_set_cache(width, height)
     local scrollbar_size
 
     if self.scrollbar then
-        local ps = (self.dir == "y") and self.scrollbar:get_size()['w'] or self.scrollbar:get_size()['h']
-        scrollbar_size = max(self.scrollbar.data.bar_line_width, ps * 2)
+        local sw, sh = self.scrollbar:fit(width, height)
+        scrollbar_size = (self.dir == "y") and sw or sh
         sb_offset = self.data.scrollbar_ontop and 0 or scrollbar_size
     end
 
@@ -75,7 +75,6 @@ function scroll:_set_cache(width, height)
             cr.source = color(self.scrollbar.data.pointer_color)
             cr:paint()
             self.scrollbar.data.pointer = surface.load(img)
-            self.scrollbar._pointer_size = {w=pw/2, h=ph/2}
         end
         self._cache_scrollbar = {x=x, y=y, w=w, h=h}
     end
