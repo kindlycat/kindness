@@ -9,6 +9,7 @@ local setmetatable = setmetatable
 local huge = math.huge
 local min = math.min
 local max = math.max
+local abs = math.abs
 local base = require("wibox.layout.base")
 local widget_base = require("wibox.widget.base")
 local table = table
@@ -55,10 +56,7 @@ function scroll:_set_cache(width, height)
             end
             pos = pos + w
         end
-        drawing[k] = {widget = v, x = x, y = y, w = w, h = h, 
-            rw = min(w - sb_offset, width - x - sb_offset),
-            rh = min(h - sb_offset, height - y - sb_offset)
-        }
+        drawing[k] = {widget = v, x = x, y = y, w = w, h = h}
     end
 
     if self.scrollbar then
@@ -99,10 +97,15 @@ function scroll:draw(wibox, cr, width, height)
     for k, v in pairs(self._cache_drawing) do
         local x = v.x - (self.dir == "x" and self._offset or 0)
         local y = v.y - (self.dir == "y" and self._offset or 0)
-        local widget, w, h, rw, rh = v.widget, v.w, v.h, v.rw, v.rh
+        local widget, w, h = v.widget, v.w, v.h
         -- Draw only visible widgets
         if y + h > 0 and y < height and x + w > 0 and x < width then
-            draw_widget(wibox, cr, widget, x, y, w, h, rw, rh)
+            -- calculate visible part of widget
+            local rx = (x < 0) and abs(x) or 0
+            local ry = (y < 0) and abs(y) or 0
+            local rw = min(w, width - x)
+            local rh = min(h, height - y)
+            draw_widget(wibox, cr, widget, x, y, w, h, rx, ry, rw, rh)
         elseif y > height or x > width then
             break
         end
@@ -111,7 +114,6 @@ function scroll:draw(wibox, cr, width, height)
     if self.scrollbar and self._show_scrollbar then
         draw_widget(wibox, cr, self.scrollbar, 
             self._cache_scrollbar.x, self._cache_scrollbar.y,
-            self._cache_scrollbar.w, self._cache_scrollbar.h,
             self._cache_scrollbar.w, self._cache_scrollbar.h
         )
     end

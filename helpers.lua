@@ -14,11 +14,22 @@ function helpers.round(x)
 end
 
 function helpers.debug(t, timeout)
+    if type(t) == 'table' then
+        local text = ''
+        for k, v in pairs(t) do
+            text = text .. '\n' .. k .. ' => ' .. tostring(v)
+        end
+        t = text
+    end
     naughty.notify({text=tostring(t), timeout=timeout or 0})
 end
 
--- Patched version of base.draw_widget. Register only wisible part of widget.
-function helpers.draw_widget(wibox, cr, widget, x, y, width, height, reg_w, reg_h)
+-- Patched version of base.draw_widget. Register widget at given area.
+function helpers.draw_widget(wibox, cr, widget, x, y, width, height, reg_x, reg_y, reg_w, reg_h)
+    local reg_x = reg_x or 0
+    local reg_y = reg_y or 0
+    local reg_w = reg_w or width
+    local reg_h = reg_h or height
     -- Use save() / restore() so that our modifications aren't permanent
     cr:save()
 
@@ -36,7 +47,7 @@ function helpers.draw_widget(wibox, cr, widget, x, y, width, height, reg_w, reg_
     end
 
     -- Register the widget for input handling
-    wibox:widget_at(widget, base.rect_to_device_geometry(cr, 0, 0, reg_w, reg_h))
+    wibox:widget_at(widget, base.rect_to_device_geometry(cr, reg_x, reg_y, reg_w, reg_h))
 
     cr:restore()
 end
