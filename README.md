@@ -3,6 +3,8 @@ kindness
 
 Some cool stuff for awesome wm.
 
+Master is for current git version of awesome wm. Use "stable" branch for stable version.
+
 ## How to install
 Just clone repo to your config folder. 
 
