@@ -24,13 +24,13 @@ local slider = { mt = {} }
 
 local function getValueFromPosition(pos, step, minp, maxp, minv, maxv)
     local percentage = (pos - minp) / ((maxp - minp) or 1)
-    local value = step * percentage * (maxv - minv) / (step or 1) + minv
-    return cap(round(value), minv, maxv)
+    local value = step * round(percentage * (maxv - minv) / (step or 1)) + minv
+    return cap(value, minv, maxv)
 end
 
 local function getPositionFromValue(val, step, minp, maxp, minv, maxv)
     local percentage = (val - minv) / ((maxv - minv) or 1)
-    local position = step * percentage * (maxp - minp) / (step or 1) + minp
+    local position = step * round(percentage * (maxp - minp) / (step or 1)) + minp
     return cap(position, minp, maxp)
 end
 
