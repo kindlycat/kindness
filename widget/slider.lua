@@ -18,7 +18,6 @@ local capi = {
     mousegrabber = mousegrabber
 }
 
-local debug = require('kindness.helpers').debug
 -- kindness.widget.slider
 local slider = { mt = {} }
 
