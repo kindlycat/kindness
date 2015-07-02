@@ -18,6 +18,7 @@ local capi = {
     mousegrabber = mousegrabber
 }
 
+local debug = require('kindness.helpers').debug
 -- kindness.widget.slider
 local slider = { mt = {} }
 
@@ -39,7 +40,7 @@ function slider:draw(wibox, cr, width, height)
     local pointer, center
     local data = self.data
     local orient = data.vertical and height or width
-    local center = round((data.vertical and width or height) / 2)
+    local center = round((data.vertical and width or height) / 2) + 0.5
     local pw, ph = self:get_pointer_size()
     local ps = data.vertical and ph/2 or pw/2
     local min_pos = 0
@@ -202,6 +203,7 @@ local function new(move, args)
         snap = args.snap or false,
         mode = args.mode or 'stop'
     }
+
     ret:add_signal('slider::data_updated')
     
     for k, v in pairs(slider) do
