@@ -4,7 +4,7 @@
 -- @release awesome-git
 ---------------------------------------------------------------------------
 local join = require('awful.util').table.join
-local timer = timer
+local timer = require('gears.timer')
 local round = require('kindness.helpers').round
 local rl = require('kindness.layout.relative')
 local tween = require('kindness.libs.tween')
