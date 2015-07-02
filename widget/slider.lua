@@ -23,14 +23,14 @@ local slider = { mt = {} }
 
 
 local function getValueFromPosition(pos, step, minp, maxp, minv, maxv)
-    local percentage = (pos - minp) / ((maxp - minp) or 1)
-    local value = step * round(percentage * (maxv - minv) / (step or 1)) + minv
+    local percentage = (pos - minp) / (maxp - minp)
+    local value = step * round(percentage * (maxv - minv) / step) + minv
     return cap(value, minv, maxv)
 end
 
 local function getPositionFromValue(val, step, minp, maxp, minv, maxv)
-    local percentage = (val - minv) / ((maxv - minv) or 1)
-    local position = step * round(percentage * (maxp - minp) / (step or 1)) + minp
+    local percentage = (val - minv) / (maxv - minv)
+    local position = percentage * (maxp - minp) + minp
     return cap(position, minp, maxp)
 end
 
@@ -39,7 +39,7 @@ function slider:draw(wibox, cr, width, height)
     local pointer, center
     local data = self.data
     local orient = data.vertical and height or width
-    local center = (data.vertical and width or height) / 2
+    local center = round((data.vertical and width or height) / 2)
     local pw, ph = self:get_pointer_size()
     local ps = data.vertical and ph/2 or pw/2
     local min_pos = 0
@@ -63,7 +63,7 @@ function slider:draw(wibox, cr, width, height)
     end
 
     self._pos = cap(self._pos, min_pos, max_pos)
-    self._val = cap(round(self._val / data.step) * data.step, data.min, data.max)
+    self._val = cap(self._val, data.min, data.max)
 
     if self._update_pos then
         self._pos = getPositionFromValue(self._val, data.step, min_pos, max_pos, data.min, data.max)
