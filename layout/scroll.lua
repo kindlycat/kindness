@@ -59,7 +59,7 @@ function scroll:_set_cache(width, height)
         drawing[k] = {widget = v, x = x, y = y, w = w, h = h}
     end
 
-    if self.scrollbar then
+    if self.scrollbar and self._max_offset > 0 then
         local x = (self.dir == "y") and width - scrollbar_size or 0
         local y = (self.dir == "y") and 0 or height - scrollbar_size
         local w = (self.dir == "y") and scrollbar_size or width
@@ -87,8 +87,7 @@ end
 -- @param width The available width.
 -- @param height The available height.
 function scroll:draw(wibox, cr, width, height)
-    local cached = self._cache_drawing
-    if not cached then
+    if not self._cache_drawing then
         self:_set_cache(width, height)
     end
 
@@ -126,8 +125,7 @@ function scroll:add(widget)
     widget_base.check_widget(widget)
     table.insert(self.widgets, widget)
     widget:connect_signal("widget::updated", self._widget_update)
-    self._cache_drawing = nil
-    self._emit_updated()
+    self._widget_update()
 end
 
 --- Reset a scroll layout. This removes all widgets from the layout.
@@ -139,8 +137,7 @@ function scroll:reset()
     self._offset = 0
     self._max_offset = 0
     self._to_end = false
-    self._cache_drawing = nil
-    self._emit_updated()
+    self._widget_update()
 end
 
 --- Scroll layout content by val.

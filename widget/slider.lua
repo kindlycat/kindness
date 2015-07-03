@@ -10,6 +10,7 @@ local pi = math.pi
 local widget = require("wibox.widget.base")
 local color = require("gears.color")
 local round = require('kindness.helpers').round
+local notzero = require('kindness.helpers').notzero
 local cap = require('kindness.helpers').cap
 local surface = require("gears.surface")
 local cairo = require('lgi').cairo
@@ -23,13 +24,13 @@ local slider = { mt = {} }
 
 
 local function getValueFromPosition(pos, step, minp, maxp, minv, maxv)
-    local percentage = (pos - minp) / (maxp - minp)
+    local percentage = (pos - minp) / notzero((maxp - minp), 1)
     local value = step * round(percentage * (maxv - minv) / step) + minv
     return cap(value, minv, maxv)
 end
 
 local function getPositionFromValue(val, step, minp, maxp, minv, maxv)
-    local percentage = (val - minv) / (maxv - minv)
+    local percentage = (val - minv) / notzero((maxv - minv), 1)
     local position = percentage * (maxp - minp) + minp
     return cap(position, minp, maxp)
 end

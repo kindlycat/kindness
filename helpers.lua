@@ -13,6 +13,10 @@ function helpers.round(x)
     return floor(x + 0.5)
 end
 
+function helpers.notzero(a, b)
+    return (a == 0) and b or a
+end
+
 function helpers.debug(t, timeout)
     if type(t) == 'table' then
         local text = ''
