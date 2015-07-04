@@ -39,7 +39,7 @@ function slider:draw(wibox, cr, width, height)
     local pointer, center
     local data = self.data
     local orient = data.vertical and height or width
-    local center = round((data.vertical and width or height) / 2) + 0.5
+    local center = (data.vertical and width or height) / 2
     local pw, ph = self:get_pointer_size()
     local ps = data.vertical and ph/2 or pw/2
     local min_pos = 0
@@ -48,6 +48,11 @@ function slider:draw(wibox, cr, width, height)
     local max_bar = orient
     local pointer_min = ps
     local pointer_max = orient - ps
+
+    if (center % 2 == 0 and self.data.bar_line_width % 2 ~= 0) or
+        (center % 2 ~= 0 and self.data.bar_line_width % 2 == 0) then
+        center = center + 0.5
+    end
 
     if data.mode == 'stop_position' then
         min_pos = ps
