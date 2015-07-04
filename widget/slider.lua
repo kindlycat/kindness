@@ -35,7 +35,6 @@ local function getPositionFromValue(val, step, minp, maxp, minv, maxv)
     return cap(position, minp, maxp)
 end
 
-
 function slider:draw(wibox, cr, width, height)
     local pointer, center
     local data = self.data
@@ -68,6 +67,7 @@ function slider:draw(wibox, cr, width, height)
 
     if self._update_pos then
         self._pos = getPositionFromValue(self._val, data.step, min_pos, max_pos, data.min, data.max)
+        self._update_pos = false
     else
         self._val = getValueFromPosition(self._pos, data.step, min_pos, max_pos, data.min, data.max)
         if data.snap then
@@ -105,13 +105,9 @@ function slider:draw(wibox, cr, width, height)
         cr:paint()
     end
 
-    if self._val ~= self._cache_val and not self._silent and self._move_function then 
-        self._move_function(self._val)
+    if self._val ~= self._cache_val then 
+        self:emit_signal("slider::value_updated")
     end
-
-    self._cache_val = self._val
-    self._silent = false
-    self._update_pos = false
 end
 
 function slider:set_vertical(vertical)
@@ -159,7 +155,7 @@ function slider:set_pointer_color(val)
 end
 
 function slider:set_value(val, silent)
-    if val == self._val then return end
+    if val == self._val or self._is_dragging then return end
     self._val = val
     self._silent = silent or false
     self._update_pos = true
@@ -183,11 +179,12 @@ local function new(move, args)
     local ret = widget.make_widget()
     local args = args or {}
     ret._pos = 0
-    ret._val = 0
-    ret._cache_val = 0
     ret._silent = false
-    ret._move_function = move or nil
     ret._update_pos = true
+    ret._is_dragging = false
+    ret._move_function = type(move) == 'function' and move or nil
+    ret._before_function = type(args.before) == 'function' and args.before or nil
+    ret._after_function = type(args.after) == 'function' and args.after or nil
     ret.data = {
         vertical = args.vertical or false,
         bar_color = args.bar_color or "#dddddd",
@@ -205,15 +202,16 @@ local function new(move, args)
     }
 
     ret:add_signal('slider::data_updated')
+    ret:add_signal('slider::value_updated')
+    
+    ret._emit_updated = function()
+        ret:emit_signal("widget::updated")
+    end
     
     for k, v in pairs(slider) do
         if type(v) == "function" then
             ret[k] = v
         end
-    end
-
-    ret._emit_updated = function()
-        ret:emit_signal("widget::updated")
     end
 
     for k, v in pairs(ret.data) do
@@ -226,26 +224,43 @@ local function new(move, args)
         end
     end
 
+    ret._val = cap(args.initial or ret.data.min, ret.data.min, ret.data.max)
+    ret._cache_val = ret._val
     ret:set_pointer(args.pointer)
 
+    ret:connect_signal("slider::value_updated", function()
+        if not ret._silent then
+            ret._move_function(ret._val)
+            ret._cache_val = ret._val
+        else
+            ret._silent = false
+        end
+    end)
+
     ret:connect_signal("button::press", function (v, x, y)
+        if ret._before_function then ret._before_function(ret._val) end
         ret._pos = ret.data.vertical and y or x
+        ret._emit_updated()
+
         if ret.data.draggable then
-            local mc = mouse:coords()
+            local mc = mouse.coords()
             local minx = mc['x'] - x
             local miny = mc['y'] - y
+            ret._is_dragging = true
             capi.mousegrabber.run(function (_mouse)
-                for k, v in ipairs(_mouse.buttons) do
-                    if k == 1 and v then
-                        ret._pos = ret.data.vertical and _mouse.y - miny or _mouse.x - minx
-                        ret._emit_updated()
-                        return true
-                    end
+                if not mouse.coords()['buttons'][1] then
+                    if ret._after_function then ret._after_function(ret._val) end
+                    ret._is_dragging = false
+                    return false
                 end
-                return false
-            end, "fleur")
-        else
-            ret._emit_updated()
+
+                local new_pos = ret.data.vertical and _mouse.y - miny or _mouse.x - minx
+                if new_pos ~= ret._pos then
+                    ret._pos = new_pos
+                    ret._emit_updated()
+                end
+                return true
+            end, args.cursor or "fleur")
         end
     end)
     return ret
