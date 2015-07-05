@@ -10,9 +10,9 @@ local huge = math.huge
 local min = math.min
 local max = math.max
 local abs = math.abs
+local table = table
 local base = require("wibox.layout.base")
 local widget_base = require("wibox.widget.base")
-local table = table
 local draw_widget = require('kindness.helpers').draw_widget
 local cap = require('kindness.helpers').cap
 local slider = require('kindness.widget.slider')
@@ -21,34 +21,27 @@ local color = require("gears.color")
 local surface = require("gears.surface")
 local cairo = require('lgi').cairo
 
+
 local scroll = { mt = {} }
 
-function scroll:_set_cache(width, height)
+
+function scroll:_cache_widgets(width, height, offset)
     local pos = 0
-    local drawing = {}
-    local widgets = self.widgets
-    local sb_offset = 0
-    local scrollbar_size
+    self._cache_drawing = {}
 
-    if self.scrollbar then
-        local sw, sh = self.scrollbar:fit(width, height)
-        scrollbar_size = (self.dir == "y") and sw or sh
-        sb_offset = self.data.scrollbar_ontop and 0 or scrollbar_size
-    end
-
-    for k, v in pairs(widgets) do
+    for k, v in pairs(self.widgets) do
         local x, y, w, h, _
 
         if self.dir == "y" then
-            x, y, w = 0, pos, width - sb_offset
+            x, y, w = 0, pos, width - offset
             _, h = base.fit_widget(v, w, huge)
             h = (h == huge) and height or h
-            if k == #widgets then
+            if k == #self.widgets then
                 self._max_offset = (y + h <= height) and 0 or y + h - height
             end
             pos = pos + h
         else
-            x, y, h = pos, 0, height - sb_offset
+            x, y, h = pos, 0, height - offset
             w, _ = base.fit_widget(v, huge, h)
             w = (w == huge) and width or w
             if k == #self.widgets then
@@ -56,15 +49,38 @@ function scroll:_set_cache(width, height)
             end
             pos = pos + w
         end
-        drawing[k] = {widget = v, x = x, y = y, w = w, h = h}
+        self._cache_drawing[k] = {widget = v, x = x, y = y, w = w, h = h}
+    end
+end
+
+
+function scroll:_set_cache(width, height)
+    local sb_offset = 0
+    local scrollbar_size = 0
+
+    if self.scrollbar then
+        local sw, sh = self.scrollbar:fit(width, height)
+        scrollbar_size = (self.dir == "y") and sw or sh
+        if not self.data.scrollbar_ontop and self._max_offset > 0 then
+            sb_offset = scrollbar_size
+        end
     end
 
-    if self.scrollbar and self._max_offset > 0 then
+    self:_cache_widgets(width, height, sb_offset)
+
+    if self.scrollbar and not self.data.scrollbar_ontop and 
+        self._max_offset > 0 and sb_offset == 0 then
+        sb_offset = scrollbar_size
+        self:_cache_widgets(width, height, scrollbar_size)
+    end
+
+    if self.scrollbar then
         local x = (self.dir == "y") and width - scrollbar_size or 0
         local y = (self.dir == "y") and 0 or height - scrollbar_size
         local w = (self.dir == "y") and scrollbar_size or width
         local h = (self.dir == "y") and height or scrollbar_size
         self.scrollbar.data.max = self._max_offset
+        self.scrollbar._update_pos = true
         if self.data.custom_pointer then
             local pw = (self.dir == "y") and w or max(w*w/(w+self._max_offset), 15)
             local ph = (self.dir == "y") and max(h*h/(h+self._max_offset), 15) or h
@@ -74,10 +90,10 @@ function scroll:_set_cache(width, height)
             cr:paint()
             self.scrollbar.data.pointer = surface.load(img)
         end
-        self._cache_scrollbar = {x=x, y=y, w=w, h=h}
+        self._cache_scrollbar = {x=x, y=y, w=w, h=h, offset=sb_offset}
     end
 
-    self._cache_drawing = drawing
+    self._cached = {w=width, h=height}
 end
 
 
@@ -87,12 +103,13 @@ end
 -- @param width The available width.
 -- @param height The available height.
 function scroll:draw(wibox, cr, width, height)
-    if not self._cache_drawing then
+    if not self._cache_drawing or self._cached.w ~= width or 
+        self._cached.h ~= height then
         self:_set_cache(width, height)
     end
 
-    self._offset = cap(self._offset, 0, self._max_offset)
-
+    self._offset = self._to_end and self._max_offset or cap(self._offset, 0, self._max_offset)
+    
     for k, v in pairs(self._cache_drawing) do
         local x = v.x - (self.dir == "x" and self._offset or 0)
         local y = v.y - (self.dir == "y" and self._offset or 0)
@@ -102,8 +119,8 @@ function scroll:draw(wibox, cr, width, height)
             -- calculate visible part of widget
             local rx = (x < 0) and abs(x) or 0
             local ry = (y < 0) and abs(y) or 0
-            local rw = min(w, width - x)
-            local rh = min(h, height - y)
+            local rw = min(w, width - x) - (self._cache_scrollbar.sb_offset or 0)
+            local rh = min(h, height - y) - (self._cache_scrollbar.sb_offset or 0)
             draw_widget(wibox, cr, widget, x, y, w, h, rx, ry, rw, rh)
         elseif y > height or x > width then
             break
@@ -121,9 +138,10 @@ end
 
 --- Add a widget to the given scroll layout.
 -- @param widget
-function scroll:add(widget)
+function scroll:add(widget, position)
+    local position = position or #self.widgets + 1
     widget_base.check_widget(widget)
-    table.insert(self.widgets, widget)
+    table.insert(self.widgets, position, widget)
     widget:connect_signal("widget::updated", self._widget_update)
     self._widget_update()
 end
@@ -186,6 +204,7 @@ local function get_layout(dir, args)
     ret.dir = dir
     ret.widgets = {}
     ret._cache_drawing = nil
+    ret._cached = {}
     ret._offset = 0
     ret._max_offset = 0
     ret._to_end = false
