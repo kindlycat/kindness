@@ -23,37 +23,36 @@ local capi = {
 local slider = { mt = {} }
 
 
-local function getValueFromPosition(pos, step, minp, maxp, minv, maxv)
-    local percentage = (pos - minp) / notzero((maxp - minp), 1)
-    local value = step * round(percentage * (maxv - minv) / step) + minv
-    return cap(value, minv, maxv)
+function slider:_get_value()
+    local cache = self._cache
+    local data = self.data
+    local percentage = (self._pos - cache.pos.min) / notzero((cache.pos.max - cache.pos.min), 1)
+    local value = data.step * round(percentage * (data.max - data.min) / data.step) + data.min
+    return cap(value, data.min, data.max)
 end
 
-local function getPositionFromValue(val, step, minp, maxp, minv, maxv)
-    local percentage = (val - minv) / notzero((maxv - minv), 1)
-    local position = percentage * (maxp - minp) + minp
-    return cap(position, minp, maxp)
+function slider:_get_position()
+    local cache = self._cache
+    local data = self.data
+    local percentage = (self._val - data.min) / notzero((data.max - data.min), 1)
+    local position = percentage * (cache.pos.max - cache.pos.min) + cache.pos.min
+    return cap(position, cache.pos.min, cache.pos.max)
 end
 
-function slider:draw(wibox, cr, width, height)
-    local pointer, center
+function slider:_set_cache(width, height)
+    local center
     local data = self.data
     local orient = data.vertical and height or width
     local center = (data.vertical and width or height) / 2
     local pw, ph = self:get_pointer_size()
-    local ps = data.vertical and ph/2 or pw/2
+    local ps = data.vertical and ph / 2 or pw / 2
     local min_pos = 0
     local max_pos = orient
     local min_bar = 0
     local max_bar = orient
     local pointer_min = ps
     local pointer_max = orient - ps
-
-    if (center % 2 == 0 and self.data.bar_line_width % 2 ~= 0) or
-        (center % 2 ~= 0 and self.data.bar_line_width % 2 == 0) then
-        center = center + 0.5
-    end
-
+    
     if data.mode == 'stop_position' then
         min_pos = ps
         max_pos = orient - ps
@@ -67,46 +66,86 @@ function slider:draw(wibox, cr, width, height)
         max_bar = orient - ps
     end
 
-    self._pos = cap(self._pos, min_pos, max_pos)
+    if (center % 2 == 0 and data.bar_line_width % 2 ~= 0) or
+        (center % 2 ~= 0 and data.bar_line_width % 2 == 0) then
+        center = center + 0.5
+    end
+
+    self._cache = {
+        center = center,
+        pos = {
+            min = min_pos,
+            max = max_pos
+        },
+        bar = {
+            min = min_bar,
+            max = max_bar
+        },
+        pointer = {
+            min = pointer_min,
+            max = pointer_max,
+            size = ps,
+            width = pw / 2,
+            height = ph / 2
+        },
+        w = width,
+        h = height
+    }
+end
+
+function slider:draw(wibox, cr, width, height)
+    if not self._cache or self._cache.w ~= width or self._cache.h ~= height then
+        self:_set_cache(width, height)
+    end
+
+    local pointer
+    local data = self.data
+    local cache = self._cache
+
+    self._pos = cap(self._pos, cache.pos.min, cache.pos.max)
     self._val = cap(self._val, data.min, data.max)
 
     if self._update_pos then
-        self._pos = getPositionFromValue(self._val, data.step, min_pos, max_pos, data.min, data.max)
+        self._pos = self:_get_position()
         self._update_pos = false
     else
-        self._val = getValueFromPosition(self._pos, data.step, min_pos, max_pos, data.min, data.max)
+        self._val = self:_get_value()
         if data.snap then
-            self._pos = getPositionFromValue(self._val, data.step, min_pos, max_pos, data.min, data.max)
+            self._pos = self:_get_position()
         end
     end
 
-    local pointer_pos = cap(self._pos, pointer_min, pointer_max)
+    local pointer_pos = cap(self._pos, cache.pointer.min, cache.pointer.max)
 
     cr:set_line_width(data.bar_line_width)
     if not data.vertical then
-        pointer = {x=pointer_pos, y=center}
-        cr:move_to(min_bar, center)
-        cr:line_to(self._pos, center)
+        pointer = {x=pointer_pos, y=cache.center}
+        cr:move_to(cache.bar.min, cache.center)
+        cr:line_to(self._pos, cache.center)
         cr:set_source(color(data.bar_color_active))
         cr:stroke()
-        cr:move_to(self._pos, center)
-        cr:line_to(max_bar, center)
+        cr:move_to(self._pos, cache.center)
+        cr:line_to(cache.bar.max, cache.center)
         cr:set_source(color(data.bar_color))
         cr:stroke()
     else
         pointer = {x=center, y=pointer_pos}
-        cr:move_to(center, min_bar)
-        cr:line_to(center, self._pos)
+        cr:move_to(cache.center, cache.bar.min)
+        cr:line_to(cache.center, self._pos)
         cr:set_source(color(data.bar_color))
         cr:stroke()
-        cr:move_to(center, self._pos)
-        cr:line_to(center, max_bar)
+        cr:move_to(cache.center, self._pos)
+        cr:line_to(cache.center, cache.bar.max)
         cr:set_source(color(data.bar_color_active))
         cr:stroke()
     end
 
     if data.with_pointer then
-        cr:set_source_surface(data.pointer, round(pointer.x - pw/2), round(pointer.y - ph/2))
+        cr:set_source_surface(
+            data.pointer,
+            round(pointer.x - cache.pointer.width),
+            round(pointer.y - cache.pointer.height)
+        )
         cr:paint()
     end
 
@@ -164,7 +203,7 @@ function slider:set_value(val, silent)
     self._val = val
     self._silent = silent or false
     self._update_pos = true
-    self._emit_updated()
+    self._emit_sliding()
 end
 
 function slider:set_mode(mode)
@@ -187,6 +226,7 @@ local function new(move, args)
     ret._silent = false
     ret._update_pos = true
     ret._is_dragging = false
+    ret._cache = nil
     ret._move_function = type(move) == 'function' and move or nil
     ret._before_function = type(args.before) == 'function' and args.before or nil
     ret._after_function = type(args.after) == 'function' and args.after or nil
@@ -203,13 +243,19 @@ local function new(move, args)
         max = args.max or 100,
         step = args.step or 1,
         snap = args.snap or false,
-        mode = args.mode or 'stop'
+        mode = args.mode or 'stop',
+        cursor = args.cursor or 'fleur'
     }
 
     ret:add_signal('slider::data_updated')
     ret:add_signal('slider::value_updated')
     
     ret._emit_updated = function()
+        ret._cache = nil
+        ret:emit_signal("widget::updated")
+    end
+
+    ret._emit_sliding = function()
         ret:emit_signal("widget::updated")
     end
     
@@ -245,7 +291,7 @@ local function new(move, args)
     ret:connect_signal("button::press", function (v, x, y)
         if ret._before_function then ret._before_function(ret._val) end
         ret._pos = ret.data.vertical and y or x
-        ret._emit_updated()
+        ret._emit_sliding()
 
         if ret.data.draggable then
             local mc = mouse.coords()
@@ -253,6 +299,7 @@ local function new(move, args)
             local miny = mc['y'] - y
             ret._is_dragging = true
             capi.mousegrabber.run(function (_mouse)
+                -- todo: use _mouse.buttons[1]
                 if not mouse.coords()['buttons'][1] then
                     if ret._after_function then ret._after_function(ret._val) end
                     ret._is_dragging = false
@@ -262,10 +309,10 @@ local function new(move, args)
                 local new_pos = ret.data.vertical and _mouse.y - miny or _mouse.x - minx
                 if new_pos ~= ret._pos then
                     ret._pos = new_pos
-                    ret._emit_updated()
+                    ret._emit_sliding()
                 end
                 return true
-            end, args.cursor or "fleur")
+            end, ret.data.cursor or "fleur")
         end
     end)
     return ret
