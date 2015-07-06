@@ -241,7 +241,7 @@ local function new(move, args)
         draggable = args.draggable == nil and true or args.draggable,
         with_pointer = args.with_pointer == nil and true or args.with_pointer,
         pointer_color = args.pointer_color or "#dddddd",
-        pointer_color_active = args.pointer_color_active or '#dddddd',
+        pointer_color_active = args.pointer_color_active,
         bar_line_width = args.bar_line_width or 2,
         pointer_radius = args.pointer_radius or 5,
         min = args.min or 0,
@@ -294,6 +294,7 @@ local function new(move, args)
     end)
 
     ret:connect_signal("button::press", function (v, x, y)
+        local pc = ret.data.pointer_color
         if ret._before_function then ret._before_function(ret._val) end
         ret._pos = ret.data.vertical and y or x
         ret._emit_redraw()
@@ -303,11 +304,19 @@ local function new(move, args)
             local minx = mc['x'] - x
             local miny = mc['y'] - y
             ret._is_dragging = true
+            if ret.data.pointer_color_active then
+                ret.data.pointer_color = ret.data.pointer_color_active
+                ret:set_pointer(nil, true)
+            end
             capi.mousegrabber.run(function (_mouse)
                 -- todo: use _mouse.buttons[1]
                 if not mouse.coords()['buttons'][1] then
                     if ret._after_function then ret._after_function(ret._val) end
                     ret._is_dragging = false
+                    if ret.data.pointer_color_active then
+                        ret.data.pointer_color = pc
+                        ret:set_pointer(nil, true)
+                    end
                     return false
                 end
 
