@@ -61,7 +61,7 @@ function scroll:_set_cache(width, height)
     if self.scrollbar then
         local sw, sh = self.scrollbar:fit(width, height)
         scrollbar_size = (self.dir == "y") and sw or sh
-        if not self.data.scrollbar_ontop and self._max_offset > 0 then
+        if self._max_offset > 0 and not self.data.scrollbar_ontop then
             sb_offset = scrollbar_size
         end
     end
@@ -127,7 +127,7 @@ function scroll:draw(wibox, cr, width, height)
         end
     end
 
-    if self.scrollbar and self._show_scrollbar then
+    if self.scrollbar and self._show_scrollbar and self._max_offset > 0 then
         draw_widget(wibox, cr, self.scrollbar, 
             self._cache_scrollbar.x, self._cache_scrollbar.y,
             self._cache_scrollbar.w, self._cache_scrollbar.h
@@ -205,6 +205,7 @@ local function get_layout(dir, args)
     ret.widgets = {}
     ret._cache_drawing = nil
     ret._cached = {}
+    ret._cache_scrollbar = {}
     ret._offset = 0
     ret._max_offset = 0
     ret._to_end = false

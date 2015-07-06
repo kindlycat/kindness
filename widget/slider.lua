@@ -129,7 +129,7 @@ function slider:draw(wibox, cr, width, height)
         cr:set_source(color(data.bar_color))
         cr:stroke()
     else
-        pointer = {x=center, y=pointer_pos}
+        pointer = {x=cache.center, y=pointer_pos}
         cr:move_to(cache.center, cache.bar.min)
         cr:line_to(cache.center, self._pos)
         cr:set_source(color(data.bar_color))
@@ -174,7 +174,7 @@ function slider:get_pointer_size()
     return surface.get_size(self.data.pointer)
 end
 
-function slider:set_pointer(val)
+function slider:set_pointer(val, redraw)
     if not val then
         local pr = self.data.pointer_radius
         val = cairo.ImageSurface(cairo.Format.ARGB32, pr*2, pr*2)
@@ -184,7 +184,11 @@ function slider:set_pointer(val)
         cr:fill()
     end
     self.data.pointer = surface.load(val)
-    self._emit_updated()
+    if redraw then
+        self._emit_redraw()
+    else
+        self._emit_updated()
+    end
     self:emit_signal("slider::data_updated")
 end
 
@@ -195,7 +199,7 @@ end
 
 function slider:set_pointer_color(val)
     self.data.pointer_color = val
-    self:set_pointer()
+    self:set_pointer(nil, true)
 end
 
 function slider:set_value(val, silent)
@@ -203,7 +207,7 @@ function slider:set_value(val, silent)
     self._val = val
     self._silent = silent or false
     self._update_pos = true
-    self._emit_sliding()
+    self._emit_redraw()
 end
 
 function slider:set_mode(mode)
@@ -237,6 +241,7 @@ local function new(move, args)
         draggable = args.draggable == nil and true or args.draggable,
         with_pointer = args.with_pointer == nil and true or args.with_pointer,
         pointer_color = args.pointer_color or "#dddddd",
+        pointer_color_active = args.pointer_color_active or '#dddddd',
         bar_line_width = args.bar_line_width or 2,
         pointer_radius = args.pointer_radius or 5,
         min = args.min or 0,
@@ -255,7 +260,7 @@ local function new(move, args)
         ret:emit_signal("widget::updated")
     end
 
-    ret._emit_sliding = function()
+    ret._emit_redraw = function()
         ret:emit_signal("widget::updated")
     end
     
@@ -291,7 +296,7 @@ local function new(move, args)
     ret:connect_signal("button::press", function (v, x, y)
         if ret._before_function then ret._before_function(ret._val) end
         ret._pos = ret.data.vertical and y or x
-        ret._emit_sliding()
+        ret._emit_redraw()
 
         if ret.data.draggable then
             local mc = mouse.coords()
@@ -309,7 +314,7 @@ local function new(move, args)
                 local new_pos = ret.data.vertical and _mouse.y - miny or _mouse.x - minx
                 if new_pos ~= ret._pos then
                     ret._pos = new_pos
-                    ret._emit_sliding()
+                    ret._emit_redraw()
                 end
                 return true
             end, ret.data.cursor or "fleur")
