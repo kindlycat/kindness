@@ -129,7 +129,7 @@ function slider:draw(wibox, cr, width, height)
         cr:set_source(color(data.bar_color))
         cr:stroke()
     else
-        pointer = {x=center, y=pointer_pos}
+        pointer = {x=cache.center, y=pointer_pos}
         cr:move_to(cache.center, cache.bar.min)
         cr:line_to(cache.center, self._pos)
         cr:set_source(color(data.bar_color))
