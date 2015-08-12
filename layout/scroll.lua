@@ -146,6 +146,30 @@ function scroll:add(widget, position)
     self._widget_update()
 end
 
+--- Delete a widget from layout.
+-- @param widget
+function scroll:remove(arg)
+    local pos = (type(arg) == 'number') and arg
+    local widget = (type(arg) == 'table') and arg
+    
+    if widget then
+        for k, v in pairs(self.widgets) do
+            if v == widget then
+                pos = k
+                break
+            end
+        end
+    else
+        widget = self.widgets[pos]
+    end
+
+    if widget and pos then
+        widget:disconnect_signal("widget::updated", self._widget_update)
+        table.remove(self.widgets, pos)
+        self._widget_update()
+    end
+end
+
 --- Reset a scroll layout. This removes all widgets from the layout.
 function scroll:reset()
     for k, v in pairs(self.widgets) do
