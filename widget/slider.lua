@@ -203,7 +203,7 @@ function slider:set_pointer_color(val)
 end
 
 function slider:set_value(val, silent)
-    if val == self._val or self._is_dragging then return end
+    if val == self._val or self._is_dragging or self.data.disabled then return end
     self._val = val
     self._silent = silent or false
     self._update_pos = true
@@ -249,7 +249,8 @@ local function new(move, args)
         step = args.step or 1,
         snap = args.snap or false,
         mode = args.mode or 'stop',
-        cursor = args.cursor or 'fleur'
+        cursor = args.cursor or 'fleur',
+        disabled = args.disabled or false
     }
 
     ret:add_signal('slider::data_updated')
@@ -285,15 +286,16 @@ local function new(move, args)
     ret:set_pointer(args.pointer)
 
     ret:connect_signal("slider::value_updated", function()
-        if not ret._silent then
+        if not ret._silent and ret._move_function then
             ret._move_function(ret._val)
-            ret._cache_val = ret._val
-        else
-            ret._silent = false
         end
+        ret._silent = false
+        ret._cache_val = ret._val
     end)
 
     ret:connect_signal("button::press", function (v, x, y)
+        if ret.data.disabled then return end
+
         local pc = ret.data.pointer_color
         if ret._before_function then ret._before_function(ret._val) end
         ret._pos = ret.data.vertical and y or x
